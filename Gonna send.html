@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scratch for a Surprise!</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --gold-gradient: linear-gradient(135deg, #d4af37 0%, #f9f295 45%, #b8860b 70%, #f9f295 100%);
+        }
+
+        body { 
+            background: var(--bg-color); 
+            color: white; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+            overflow: hidden; 
+            touch-action: none; /* Critical: Prevents page scrolling while scratching */
+        }
+
+        h1 { margin-bottom: 10px; font-size: 1.5rem; text-align: center; }
+        
+        /* Responsive Container */
+        .container { 
+            position: relative; 
+            width: 85vw; 
+            max-width: 320px; 
+            aspect-ratio: 1 / 1;
+            user-select: none; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        #canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            z-index: 2; 
+            cursor: crosshair; 
+            touch-action: none;
+        }
+
+        .base-content { 
+            position: absolute; 
+            inset: 0;
+            background: #fff; 
+            color: #333; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            text-align: center; 
+            padding: 20px; 
+            box-sizing: border-box; 
+            z-index: 1;
+        }
+
+        .base-content h2 { color: #ff4081; font-size: 1.8rem; margin: 10px 0; }
+        .base-content p { font-size: 1rem; line-height: 1.4; }
+
+        .hint { 
+            margin-top: 25px; 
+            color: #aaa; 
+            font-size: 0.9rem; 
+            animation: pulse 1.5s infinite; 
+            text-align: center;
+        }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        .percent-indicator {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎁 Birthday Mystery Box</h1>
+    <p style="margin-bottom: 20px;">Use your finger to scratch!</p>
+
+    <div class="container" id="js-container">
+        <div class="base-content">
+            <img src="https://api.dicebear.com/7.x/fun-emoji/svg?seed=Lucky" width="80" alt="Surprise">
+            <h2>HBD BESTIE!</h2>
+            <p>You just won a virtual hugs and a treat from me! 🍦</p>
+        </div>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <p class="hint">Keep scratching to reveal! ✨</p>
+    <div class="percent-indicator" id="status">0% revealed</div>
+
+    <script>
+        const container = document.getElementById('js-container');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const status = document.getElementById('status');
+        
+        let isDrawing = false;
+        let width, height;
+
+        // Initialize sizing
+        function init() {
+            width = container.offsetWidth;
+            height = container.offsetHeight;
+            canvas.width = width;
+            canvas.height = height;
+
+            // Fill with a "Gold/Silver" gradient
+            const grd = ctx.createLinearGradient(0, 0, width, height);
+            grd.addColorStop(0, '#C0C0C0');
+            grd.addColorStop(0.5, '#E0E0E0');
+            grd.addColorStop(1, '#A9A9A9');
+            
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, width, height);
+
+            // Add text hint on the gold
+            ctx.fillStyle = '#666';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('SCRATCH HERE', width / 2, height / 2);
+        }
+
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function scratch(e) {
+            if (!isDrawing) return;
+            e.preventDefault();
+
+            const pos = getPointerPos(e);
+            
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 25, 0, Math.PI * 2);
+            ctx.fill();
+            
+            checkScratchPercent();
+        }
+
+        // Auto-reveal if 50% is scratched
+        function checkScratchPercent() {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const pixels = imageData.data;
+            let clearPixels = 0;
+
+            for (let i = 3; i < pixels.length; i += 4) {
+                if (pixels[i] === 0) clearPixels++;
+            }
+
+            const percent = Math.round((clearPixels / (pixels.length / 4)) * 100);
+            status.innerText = `${percent}% revealed`;
+
+            if (percent > 50) {
+                canvas.style.transition = 'opacity 1s';
+                canvas.style.opacity = '0';
+                setTimeout(() => canvas.remove(), 1000);
+                status.innerText = "100% Revealed! 🎉";
+            }
+        }
+
+        // Desktop Events
+        canvas.addEventListener('mousedown', () => isDrawing = true);
+        window.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mousemove', scratch);
+
+        // Mobile Events
+        canvas.addEventListener('touchstart', (e) => { 
+            isDrawing = true; 
+            scratch(e);
+        });
+        canvas.addEventListener('touchmove', scratch);
+        canvas.addEventListener('touchend', () => isDrawing = false);
+
+        // Resize support
+        window.addEventListener('load', init);
+        window.addEventListener('resize', init);
+    </script>
+</body>
+</html>
